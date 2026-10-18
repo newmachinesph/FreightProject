@@ -1,0 +1,19 @@
+{
+  "name": "truckconnect-tests",
+  "private": true,
+  "scripts": {
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:auth": "npx playwright test e2e/auth.spec.ts",
+    "test:e2e:web": "npx playwright test e2e/web.spec.ts",
+    "test:e2e:marketplace": "npx playwright test e2e/marketplace.spec.ts",
+    "test:e2e:portals": "npx playwright test e2e/portals.spec.ts",
+    "test:e2e:journeys": "npx playwright test e2e/user-journeys.spec.ts",
+    "test:e2e:responsive": "npx playwright test e2e/responsive.spec.ts",
+    "test:e2e:a11y": "npx playwright test e2e/accessibility.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}

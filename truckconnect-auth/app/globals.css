@@ -1,0 +1,376 @@
+@import "tailwindcss";
+
+:root {
+  --navy: #1B2D5E;
+  --navy-dark: #142248;
+  --navy-light: #243d7a;
+  --blue: #2563EB;
+  --blue-light: #3B82F6;
+  --green: #059669;
+  --amber: #D97706;
+  --red: #DC2626;
+  --bg: #F0F4FC;
+  --surface: #FFFFFF;
+  --border: #E2E8F0;
+  --text-1: #0F172A;
+  --text-2: #334155;
+  --text-3: #64748B;
+  --text-4: #94A3B8;
+  --sidebar-width: 240px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text-1);
+  line-height: 1.5;
+}
+
+/* ── App Layout ── */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-layout > main {
+  flex: 1;
+  background: var(--bg);
+  overflow: auto;
+  min-width: 0;
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  background: var(--navy);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-primary:hover { background: var(--navy-light); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-blue {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-blue:hover { background: var(--blue-light); }
+.btn-blue:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-ghost:hover { background: var(--bg); }
+
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Form fields ── */
+.field {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text-1);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field:focus { border-color: var(--blue); }
+.field::placeholder { color: var(--text-4); }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.badge-navy    { background: #E8EDF8; color: var(--navy); }
+.badge-green   { background: #D1FAE5; color: #065F46; }
+.badge-amber   { background: #FEF3C7; color: #92400E; }
+.badge-red     { background: #FEE2E2; color: #991B1B; }
+.badge-blue    { background: #DBEAFE; color: #1D4ED8; }
+.badge-purple  { background: #EDE9FE; color: #5B21B6; }
+.badge-gray    { background: #F1F5F9; color: var(--text-3); }
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #F8FAFC; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background: var(--navy);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 40;
+}
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: rgba(255,255,255,0.65);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.sidebar-nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.sidebar-nav-item.active { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* ── Mobile Header ── */
+.mobile-header {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--navy);
+  color: #fff;
+  padding: 12px 16px;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-header-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.mobile-menu-btn {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mobile-menu-btn:hover { background: rgba(255,255,255,0.1); }
+
+/* ── Sidebar Overlay (mobile) ── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 39;
+}
+
+.sidebar-close-btn {
+  display: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  cursor: pointer;
+  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: absolute;
+  top: 16px;
+  right: 12px;
+}
+
+/* ── Animations ── */
+@keyframes fade-in  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.animate-in { animation: fade-in 0.25s ease-out; }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+@keyframes slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* ── MOBILE RESPONSIVE  (< 768px) ─────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 280px;
+  }
+
+  /* Show mobile header & hamburger */
+  .mobile-header {
+    display: flex;
+  }
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  /* Layout stacks vertically */
+  .app-layout {
+    flex-direction: column;
+  }
+
+  /* Sidebar becomes fixed overlay drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 50;
+    height: 100vh;
+    min-height: unset;
+  }
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+    animation: slide-in 0.25s ease;
+  }
+
+  /* Show overlay when sidebar is open */
+  .sidebar-overlay.sidebar-overlay-visible {
+    display: block;
+  }
+
+  /* Show close button on mobile */
+  .sidebar-close-btn {
+    display: flex;
+  }
+
+  /* Page content padding adjustments */
+  .page-content {
+    padding: 16px !important;
+  }
+
+  /* Profile settings — single column grid */
+  .profile-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px 0 !important;
+  }
+
+  /* Profile section padding */
+  .profile-section {
+    padding: 16px !important;
+  }
+
+  /* Avatar layout stacks */
+  .avatar-row {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 16px !important;
+  }
+
+  /* Dashboard grids responsive */
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Table responsiveness */
+  th, td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  /* Cards smaller padding */
+  .card {
+    padding: 14px;
+  }
+
+  /* Auth card on tiny screens */
+  .auth-card {
+    padding: 20px !important;
+  }
+}
+
+/* ── Tablet adjustments (768–1024px) ──────────────────────────────────── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  :root {
+    --sidebar-width: 220px;
+  }
+
+  .sidebar-nav-item {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+}

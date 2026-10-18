@@ -1,0 +1,28 @@
+{
+  "name": "truckconnect-monorepo",
+  "private": true,
+  "license": "MIT",
+  "workspaces": [
+    "truckconnect-auth",
+    "truckconnect-sdk",
+    "truckconnect-shipper",
+    "truckconnect-carrier",
+    "truckconnect-warehouse",
+    "truckconnect-app",
+    "truckconnect-web"
+  ],
+  "scripts": {
+    "build": "npm run build -w truckconnect-sdk && npm run build -w truckconnect-auth && npm run build -w truckconnect-shipper && npm run build -w truckconnect-carrier && npm run build -w truckconnect-warehouse && npm run build -w truckconnect-app && npm run build -w truckconnect-web",
+    "build:sdk": "npm run build -w truckconnect-sdk",
+    "build:auth": "npm run build -w truckconnect-auth",
+    "dev:auth": "npm run dev -w truckconnect-auth -- -p 3001",
+    "dev:shipper": "npm run dev -w truckconnect-shipper -- -p 3003",
+    "dev:carrier": "npm run dev -w truckconnect-carrier -- -p 3004",
+    "dev:warehouse": "npm run dev -w truckconnect-warehouse -- -p 3005",
+    "dev:app": "npm run dev -w truckconnect-app -- -p 3006",
+    "dev:web": "npm run dev -w truckconnect-web -- -p 3000"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1"
+  }
+}

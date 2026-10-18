@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" fill="#334155">
+  <!-- Medium wing van - cab-over truck with side-opening cargo body, 6 wheels -->
+  <!-- Cab -->
+  <path d="M10,26 L10,56 L52,56 L52,22 Q52,18 48,18 L14,18 Q10,18 10,22 Z"/>
+  <!-- Windshield -->
+  <path d="M14,22 L36,22 L36,42 L14,42 Z" fill="#94a3b8"/>
+  <!-- Headlight -->
+  <rect x="8" y="40" width="4" height="5" rx="1" fill="#fbbf24"/>
+  <!-- Bumper -->
+  <rect x="6" y="52" width="48" height="5" rx="2"/>
+  <!-- Cargo box bottom -->
+  <rect x="54" y="36" width="136" height="20" rx="1"/>
+  <!-- Cargo box top rail -->
+  <rect x="54" y="12" width="136" height="4" rx="1"/>
+  <!-- Wing door (open, angled up) -->
+  <path d="M54,16 L54,12 L190,12 L190,16 L190,28 L186,28 L186,18 L58,18 L58,28 L54,28 Z" fill="#475569"/>
+  <!-- Wing door hinge lines -->
+  <line x1="58" y1="16" x2="58" y2="28" stroke="#1e293b" stroke-width="0.5"/>
+  <line x1="186" y1="16" x2="186" y2="28" stroke="#1e293b" stroke-width="0.5"/>
+  <!-- Inside visible area (cargo space) -->
+  <rect x="58" y="28" width="128" height="8" fill="#94a3b8" opacity="0.3"/>
+  <!-- Cargo floor -->
+  <rect x="54" y="54" width="136" height="4" rx="1" fill="#1e293b"/>
+  <!-- Tail light -->
+  <rect x="190" y="38" width="4" height="6" rx="1" fill="#ef4444"/>
+  <!-- Front wheel well -->
+  <rect x="22" y="55" width="22" height="7" rx="4" fill="#1e293b"/>
+  <!-- Rear wheel wells -->
+  <rect x="138" y="55" width="22" height="7" rx="4" fill="#1e293b"/>
+  <rect x="162" y="55" width="22" height="7" rx="4" fill="#1e293b"/>
+  <!-- Front wheel -->
+  <circle cx="33" cy="64" r="10" fill="#1e293b"/>
+  <circle cx="33" cy="64" r="5" fill="#64748b"/>
+  <!-- Rear wheels (dual axle) -->
+  <circle cx="149" cy="64" r="10" fill="#1e293b"/>
+  <circle cx="149" cy="64" r="5" fill="#64748b"/>
+  <circle cx="173" cy="64" r="10" fill="#1e293b"/>
+  <circle cx="173" cy="64" r="5" fill="#64748b"/>
+</svg>

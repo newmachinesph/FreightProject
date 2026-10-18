@@ -1,0 +1,2286 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TruckConnect Auth API",
+    "description": "Authentication, authorization, and organization management API for the TruckConnect Philippine freight platform.\n\nTruckConnect Auth provides a complete identity and access management solution for freight logistics companies in the Philippines. It handles user authentication, organization management, role-based access control, API key provisioning, and webhook event delivery.\n\n## Authentication Methods\n\nTruckConnect Auth supports two authentication methods:\n\n### Session Cookie\nAfter signing in via `/api/auth/sign-in/email`, a `better-auth.session_token` cookie is set automatically. This is the primary method for browser-based applications.\n\n### Bearer Token\nFor service-to-service communication, use the `Authorization: Bearer <token>` header. The token can be:\n- A **JWT access token** obtained from `/api/auth/token` (short-lived, for microservice calls)\n- A **TruckConnect API key** (`tc_live_*` format, for long-lived integrations)\n\n## Rate Limiting\nAll endpoints enforce rate limits. When exceeded, the API returns `429 Too Many Requests` with `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers. Limits vary by endpoint and are documented per-operation.\n\n## Error Responses\nAll errors follow a consistent format with an `error` string field. Some endpoints return a `code` + `message` pair for machine-readable error handling.\n\n## Organization Types\nTruckConnect supports multiple organization types: `tc_platform`, `enterprise_shipper`, `msme_shipper`, `carrier_fleet`, `freight_forwarder`, `warehouse_operator`.",
+    "version": "1.2.0",
+    "contact": {
+      "name": "TruckConnect Engineering",
+      "email": "engineering@truckconnect.ph",
+      "url": "https://truckconnect.ph/support"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://truckconnect.ph/terms"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://auth.truckconnect.ph",
+      "description": "Production"
+    },
+    {
+      "url": "https://auth-staging.truckconnect.ph",
+      "description": "Staging"
+    },
+    {
+      "url": "http://localhost:3001",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    { "name": "Authentication", "description": "Sign-up, sign-in, sign-out, and session management" },
+    { "name": "User Management", "description": "User profile, metadata, sessions, and avatar management" },
+    { "name": "Organizations", "description": "Organization CRUD, membership, and invite management" },
+    { "name": "API Keys", "description": "Service-to-service API key management and validation" },
+    { "name": "Webhooks", "description": "Webhook endpoint management for event notifications" },
+    { "name": "Admin", "description": "Platform administration operations (super_admin only)" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "Session cookie automatically set after sign-in via `/api/auth/sign-in/email`. The cookie is HttpOnly, Secure, and SameSite=Lax. Sessions expire after 30 days of inactivity."
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT or API key",
+        "description": "Bearer token authentication. Accepts either:\n- **JWT access token** from `/api/auth/token` (RS256, 15-minute expiry)\n- **TruckConnect API key** in `tc_live_*` format (long-lived, org-scoped)"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "u_abc123def456", "description": "Unique user identifier" },
+          "email": { "type": "string", "format": "email", "example": "juan@manilaexpress.ph" },
+          "name": { "type": "string", "example": "Juan Dela Cruz" },
+          "image": { "type": "string", "nullable": true, "example": "https://r2.truckconnect.ph/avatars/u_abc123_1700000000.jpg", "description": "Avatar URL hosted on Cloudflare R2" },
+          "emailVerified": { "type": "boolean", "example": true },
+          "phoneNumber": { "type": "string", "nullable": true, "example": "+639171234567", "description": "E.164 format phone number" },
+          "phoneNumberVerified": { "type": "boolean", "example": false },
+          "role": { "type": "string", "example": "user", "enum": ["user", "super_admin"], "description": "Platform-level role" },
+          "banned": { "type": "boolean", "example": false },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "Session identifier" },
+          "userId": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "ipAddress": { "type": "string", "nullable": true },
+          "userAgent": { "type": "string", "nullable": true }
+        }
+      },
+      "Organization": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "org_manila_express_01" },
+          "name": { "type": "string", "example": "Manila Express Logistics" },
+          "slug": { "type": "string", "example": "manila-express-logistics" },
+          "metadata": { "type": "object", "nullable": true, "description": "Organization metadata including type and configuration" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ApiKeyListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "k_a1b2c3d4e5f6" },
+          "name": { "type": "string", "example": "Production TMS Integration" },
+          "prefix": { "type": "string", "example": "tc_live_a1b2c3d4...", "description": "First 16 characters of the key for identification" },
+          "expiresAt": { "type": "string", "format": "date-time", "nullable": true },
+          "lastUsedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "revokedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ApiKeyCreated": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "k_a1b2c3d4e5f6" },
+          "name": { "type": "string", "example": "Production TMS Integration" },
+          "prefix": { "type": "string", "example": "tc_live_a1b2c3d4..." },
+          "plaintext": { "type": "string", "description": "The full API key. Shown ONCE at creation time, never stored. Save this immediately.", "example": "tc_live_a1b2c3d4_e5f6a7b8c9d0e1f2a3b4c5d6" },
+          "expiresAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "InviteCode": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "orgId": { "type": "string" },
+          "code": { "type": "string", "example": "MNLX2025" },
+          "role": { "type": "string", "example": "member" },
+          "maxUses": { "type": "integer", "nullable": true, "example": 50 },
+          "usedCount": { "type": "integer", "example": 3 },
+          "expiresAt": { "type": "string", "format": "date-time", "nullable": true },
+          "revokedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SessionListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "current": { "type": "boolean", "example": true },
+          "device": { "type": "string", "example": "Android" },
+          "ipAddress": { "type": "string", "example": "203.177.42.1" },
+          "lastActive": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "example": "Invalid request parameters", "description": "Human-readable error message" }
+        },
+        "required": ["error"]
+      },
+      "CodedErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string", "example": "INVALID_CREDENTIALS", "description": "Machine-readable error code" },
+          "message": { "type": "string", "example": "The email or password you entered is incorrect", "description": "Human-readable error message" }
+        },
+        "required": ["code", "message"]
+      },
+      "RateLimitError": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "example": "Too many requests" },
+          "retryAfter": { "type": "integer", "example": 60, "description": "Seconds until the rate limit resets" }
+        },
+        "required": ["error"]
+      },
+      "MarketplaceProfile": {
+        "type": "object",
+        "properties": {
+          "orgId": { "type": "string", "example": "org_manila_express_01" },
+          "businessName": { "type": "string", "example": "Manila Express Logistics" },
+          "businessType": { "type": "string", "enum": ["carrier_fleet", "freight_forwarder", "warehouse_operator", "enterprise_shipper", "msme_shipper"], "example": "carrier_fleet" },
+          "serviceAreas": { "type": "array", "items": { "type": "string" }, "example": ["NCR", "Central Luzon", "CALABARZON"] },
+          "vehicleTypes": { "type": "array", "items": { "type": "string" }, "example": ["6-wheeler", "10-wheeler", "trailer"] },
+          "description": { "type": "string", "example": "Full-service carrier fleet operating across Luzon" },
+          "contactEmail": { "type": "string", "format": "email" },
+          "contactPhone": { "type": "string", "example": "+639171234567" },
+          "website": { "type": "string", "format": "uri", "nullable": true },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "example": "pending" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UserOrg": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "org_manila_express_01" },
+          "name": { "type": "string", "example": "Manila Express Logistics" },
+          "slug": { "type": "string", "example": "manila-express-logistics" },
+          "role": { "type": "string", "example": "owner", "description": "The user's role within this organization" },
+          "metadata": { "type": "object", "nullable": true }
+        }
+      }
+    },
+    "headers": {
+      "X-RateLimit-Limit": {
+        "description": "Maximum number of requests allowed in the current window",
+        "schema": { "type": "integer", "example": 10 }
+      },
+      "X-RateLimit-Remaining": {
+        "description": "Number of requests remaining in the current window",
+        "schema": { "type": "integer", "example": 7 }
+      },
+      "X-RateLimit-Reset": {
+        "description": "Unix timestamp (seconds) when the rate limit window resets",
+        "schema": { "type": "integer", "example": 1710900000 }
+      }
+    }
+  },
+  "security": [
+    { "cookieAuth": [] },
+    { "bearerAuth": [] }
+  ],
+  "paths": {
+    "/api/auth/sign-up/email": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "signUpEmail",
+        "summary": "Register a new account with email and password",
+        "description": "Creates a new user account and establishes a session. The password must pass TruckConnect's password policy:\n- Minimum 8 characters\n- At least one uppercase letter, one lowercase letter, one digit, and one special character\n- Not found in the Have I Been Pwned breach database\n\nA verification email is sent automatically after successful registration.",
+        "x-rateLimit": {
+          "limit": 5,
+          "window": "1 minute",
+          "scope": "IP address"
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "juan@manilaexpress.ph", "description": "User's email address (must be unique)" },
+                  "password": { "type": "string", "minLength": 8, "example": "SecureP@ss2025!", "description": "Password meeting TruckConnect policy" },
+                  "name": { "type": "string", "example": "Juan Dela Cruz", "description": "User's full name" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account created successfully. A session cookie is set and a verification email is sent.",
+            "headers": {
+              "X-RateLimit-Limit": { "$ref": "#/components/headers/X-RateLimit-Limit" },
+              "X-RateLimit-Remaining": { "$ref": "#/components/headers/X-RateLimit-Remaining" },
+              "X-RateLimit-Reset": { "$ref": "#/components/headers/X-RateLimit-Reset" }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": { "$ref": "#/components/schemas/User" },
+                    "session": { "$ref": "#/components/schemas/Session" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error -- weak password, missing fields, or invalid email format",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "409": {
+            "description": "Email already registered",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "429": {
+            "description": "Rate limit exceeded (5 requests/minute per IP)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/sign-in/email": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "signInEmail",
+        "summary": "Sign in with email and password",
+        "description": "Authenticates a user with email and password credentials. On success, sets a session cookie and returns the user profile. Failed attempts are tracked for security monitoring.",
+        "x-rateLimit": {
+          "limit": 10,
+          "window": "1 minute",
+          "scope": "IP address"
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "juan@manilaexpress.ph" },
+                  "password": { "type": "string", "example": "SecureP@ss2025!" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed in successfully. A `better-auth.session_token` cookie is set.",
+            "headers": {
+              "X-RateLimit-Limit": { "$ref": "#/components/headers/X-RateLimit-Limit" },
+              "X-RateLimit-Remaining": { "$ref": "#/components/headers/X-RateLimit-Remaining" },
+              "X-RateLimit-Reset": { "$ref": "#/components/headers/X-RateLimit-Reset" }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": { "$ref": "#/components/schemas/User" },
+                    "session": { "$ref": "#/components/schemas/Session" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CodedErrorResponse" } } }
+          },
+          "403": {
+            "description": "Account is banned",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "429": {
+            "description": "Rate limit exceeded (10 requests/minute per IP)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/sign-out": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "signOut",
+        "summary": "Sign out and invalidate current session",
+        "description": "Clears the session cookie and invalidates the session server-side. The session token can no longer be used for authentication after this call.",
+        "responses": {
+          "200": { "description": "Signed out successfully. Session cookie cleared." },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/get-session": {
+      "get": {
+        "tags": ["Authentication"],
+        "operationId": "getSession",
+        "summary": "Get the current session and user",
+        "description": "Returns the current session and user data if authenticated. Returns `null` if no valid session exists. This endpoint is the primary way for client applications to check authentication state.",
+        "responses": {
+          "200": {
+            "description": "Session data (or null if not authenticated)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": { "$ref": "#/components/schemas/User" },
+                    "session": { "$ref": "#/components/schemas/Session" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/request-password-reset": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "requestPasswordReset",
+        "summary": "Request a password reset email",
+        "description": "Sends a password reset link to the provided email address. Always returns 200 regardless of whether the email exists, to prevent email enumeration attacks. The reset link expires after 1 hour.",
+        "x-rateLimit": {
+          "limit": 3,
+          "window": "15 minutes",
+          "scope": "IP address + email"
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "juan@manilaexpress.ph" },
+                  "redirectTo": { "type": "string", "description": "URL to redirect to after reset (must be an allowed origin)", "example": "https://app.truckconnect.ph/reset-password" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Reset email sent (or silently ignored if email not found)" },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "resetPassword",
+        "summary": "Reset password using a reset token",
+        "description": "Completes the password reset flow using the token received via email. The token is single-use and expires after 1 hour. The new password must meet TruckConnect's password policy.",
+        "x-rateLimit": {
+          "limit": 5,
+          "window": "15 minutes",
+          "scope": "IP address"
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token", "newPassword"],
+                "properties": {
+                  "token": { "type": "string", "description": "Reset token from the email link" },
+                  "newPassword": { "type": "string", "minLength": 8, "example": "NewSecureP@ss2025!", "description": "New password meeting TruckConnect policy" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password reset successfully. All existing sessions are invalidated." },
+          "400": {
+            "description": "Invalid or expired token, or password doesn't meet policy",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "changePassword",
+        "summary": "Change the current user's password",
+        "description": "Changes the password for the authenticated user. Requires the current password for verification. The new password must meet TruckConnect's password policy. All other sessions are invalidated after a successful change for security.",
+        "x-rateLimit": {
+          "limit": 5,
+          "window": "15 minutes",
+          "scope": "user ID"
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["currentPassword", "newPassword"],
+                "properties": {
+                  "currentPassword": { "type": "string", "description": "The user's current password", "example": "OldP@ss2025!" },
+                  "newPassword": { "type": "string", "minLength": 10, "description": "The new password (must meet password policy)", "example": "NewSecureP@ss2026!" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password changed successfully. Other sessions invalidated." },
+          "400": {
+            "description": "New password doesn't meet policy requirements",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated or current password is incorrect",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CodedErrorResponse" } } }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/validate-password": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "validatePassword",
+        "summary": "Validate a password against TruckConnect policy",
+        "description": "Checks a password against TruckConnect's password rules (length, complexity, common passwords) and the Have I Been Pwned breach database. Use this for real-time password strength feedback during sign-up or password change forms.",
+        "x-rateLimit": {
+          "limit": 30,
+          "window": "1 minute",
+          "scope": "IP address"
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "password": { "type": "string", "example": "SecureP@ss2025!" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result with strength assessment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": { "type": "boolean", "example": true },
+                    "errors": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "example": []
+                    },
+                    "strength": { "type": "string", "enum": ["weak", "fair", "strong"], "example": "strong" }
+                  }
+                },
+                "examples": {
+                  "strong": {
+                    "summary": "Strong password",
+                    "value": { "valid": true, "errors": [], "strength": "strong" }
+                  },
+                  "weak": {
+                    "summary": "Weak password with errors",
+                    "value": {
+                      "valid": false,
+                      "errors": ["Must be at least 8 characters", "Must contain an uppercase letter"],
+                      "strength": "weak"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/phone-number/send-otp": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "sendPhoneOtp",
+        "summary": "Send OTP to phone number",
+        "description": "Sends a 6-digit one-time password via SMS to the user's phone number for verification. The OTP expires after 10 minutes. Requires an active session.",
+        "x-rateLimit": {
+          "limit": 3,
+          "window": "10 minutes",
+          "scope": "user ID"
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phoneNumber"],
+                "properties": {
+                  "phoneNumber": { "type": "string", "description": "E.164 format phone number (Philippine numbers start with +63)", "example": "+639171234567" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OTP sent successfully via SMS" },
+          "400": {
+            "description": "Invalid phone number format",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "429": {
+            "description": "Rate limit exceeded (max 3 OTPs per 10 minutes)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/phone-number/verify": {
+      "post": {
+        "tags": ["Authentication"],
+        "operationId": "verifyPhoneOtp",
+        "summary": "Verify phone number with OTP",
+        "description": "Verifies the 6-digit OTP code and marks the phone number as verified on the user's account. The OTP is single-use and expires after 10 minutes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phoneNumber", "code"],
+                "properties": {
+                  "phoneNumber": { "type": "string", "example": "+639171234567" },
+                  "code": { "type": "string", "example": "123456", "description": "6-digit OTP code received via SMS" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Phone number verified successfully" },
+          "400": {
+            "description": "Invalid or expired OTP",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/token": {
+      "get": {
+        "tags": ["Authentication"],
+        "operationId": "getJwtToken",
+        "summary": "Get a JWT access token for the current session",
+        "description": "Exchanges the session cookie for a short-lived JWT access token (RS256, 15-minute expiry). Used by client applications to authenticate with other TruckConnect microservices. The JWT contains the user ID, email, role, and active organization context in its claims.",
+        "responses": {
+          "200": {
+            "description": "JWT access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": { "type": "string", "description": "Signed RS256 JWT access token (15-minute expiry)" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/jwks": {
+      "get": {
+        "tags": ["Authentication"],
+        "operationId": "getJwks",
+        "summary": "JSON Web Key Set (JWKS)",
+        "description": "Returns the public keys used to verify JWT tokens issued by TruckConnect Auth. Other microservices should cache this response and use it to validate tokens without contacting the auth server on every request. Keys are rotated periodically.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "JWKS containing public keys for JWT verification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kty": { "type": "string", "example": "RSA" },
+                          "kid": { "type": "string", "description": "Key ID for matching against JWT header" },
+                          "use": { "type": "string", "example": "sig" },
+                          "alg": { "type": "string", "example": "RS256" },
+                          "n": { "type": "string", "description": "RSA modulus (Base64url encoded)" },
+                          "e": { "type": "string", "example": "AQAB", "description": "RSA exponent (Base64url encoded)" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/revoke-other-sessions": {
+      "post": {
+        "tags": ["User Management"],
+        "operationId": "revokeOtherSessions",
+        "summary": "Revoke all other sessions",
+        "description": "Signs out all sessions except the current one. Useful when a user suspects unauthorized access to their account. Returns the count of sessions that were revoked.",
+        "responses": {
+          "200": {
+            "description": "All other sessions revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": { "type": "integer", "description": "Number of sessions revoked", "example": 3 }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/user/metadata": {
+      "get": {
+        "tags": ["User Management"],
+        "operationId": "getUserMetadata",
+        "summary": "Get user metadata",
+        "description": "Returns the current user's trusted and untrusted metadata. super_admin can read any user's metadata by passing `?userId=xxx`.\n\n- **trustedMetadata**: Server-controlled data, only writable by super_admin (e.g., KYC status, account tier)\n- **untrustedMetadata**: User-controlled data, writable by the user themselves (e.g., preferences, UI settings)\n\nMaximum 64 KB per metadata field.",
+        "parameters": [
+          { "name": "userId", "in": "query", "schema": { "type": "string" }, "description": "Target user ID (super_admin only, defaults to self)", "example": "u_abc123def456" }
+        ],
+        "responses": {
+          "200": {
+            "description": "User metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "trustedMetadata": {
+                      "type": "object",
+                      "example": { "kycVerified": true, "accountTier": "premium" }
+                    },
+                    "untrustedMetadata": {
+                      "type": "object",
+                      "example": { "preferredLanguage": "fil", "dashboardLayout": "compact" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Cannot read another user's metadata (requires super_admin)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "User not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["User Management"],
+        "operationId": "updateUserMetadata",
+        "summary": "Update user metadata",
+        "description": "Merges top-level keys into the user's metadata. Send `null` for a key value to delete that key. super_admin can update any user via `?userId=xxx`.\n\n- **untrusted**: Writable by the user themselves\n- **trusted**: Only writable by super_admin\n\nMaximum 64 KB per metadata field. Nesting limited to 4 levels deep.",
+        "parameters": [
+          { "name": "userId", "in": "query", "schema": { "type": "string" }, "description": "Target user ID (super_admin only, defaults to self)" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "trusted": {
+                    "type": "object",
+                    "description": "Trusted metadata fields to merge (super_admin only)",
+                    "example": { "kycVerified": true }
+                  },
+                  "untrusted": {
+                    "type": "object",
+                    "description": "Untrusted metadata fields to merge (user-writable)",
+                    "example": { "preferredLanguage": "fil", "notifications": { "sms": true, "email": false } }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "trustedMetadata": { "type": "object" },
+                    "untrustedMetadata": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON body or metadata exceeds 64 KB limit",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Cannot write trusted metadata (requires super_admin) or cannot update another user",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "User not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/user/sessions": {
+      "get": {
+        "tags": ["User Management"],
+        "operationId": "listSessions",
+        "summary": "List active sessions",
+        "description": "Returns all active (non-expired) sessions for the current user, including device type (parsed from User-Agent), IP address, and whether it is the current session. Useful for building a \"manage sessions\" UI.",
+        "responses": {
+          "200": {
+            "description": "List of active sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/SessionListItem" }
+                    }
+                  }
+                },
+                "example": {
+                  "sessions": [
+                    {
+                      "id": "sess_abc123",
+                      "current": true,
+                      "device": "Android",
+                      "ipAddress": "203.177.42.1",
+                      "lastActive": "2026-03-19T10:00:00.000Z",
+                      "createdAt": "2026-03-18T08:00:00.000Z",
+                      "expiresAt": "2026-04-18T08:00:00.000Z"
+                    },
+                    {
+                      "id": "sess_def456",
+                      "current": false,
+                      "device": "Windows",
+                      "ipAddress": "120.28.15.200",
+                      "lastActive": "2026-03-17T14:00:00.000Z",
+                      "createdAt": "2026-03-10T09:00:00.000Z",
+                      "expiresAt": "2026-04-10T09:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["User Management"],
+        "operationId": "revokeSession",
+        "summary": "Revoke a session",
+        "description": "Revokes a specific session by ID. Cannot revoke the current session (use sign-out instead). Only the session owner can revoke their own sessions.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["sessionId"],
+                "properties": {
+                  "sessionId": { "type": "string", "description": "ID of the session to revoke", "example": "sess_def456" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": { "type": "boolean", "example": true }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing sessionId or attempting to revoke current session",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/user/avatar": {
+      "post": {
+        "tags": ["User Management"],
+        "operationId": "uploadAvatar",
+        "summary": "Upload or replace avatar",
+        "description": "Uploads a new avatar image for the current user. The image is stored on Cloudflare R2 and the previous avatar is automatically deleted.\n\n**Constraints:**\n- Max file size: 4 MB\n- Allowed types: JPEG, PNG, WebP, GIF\n- Magic bytes are validated against declared MIME type\n- Minimum dimensions: 50x50 pixels",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["avatar"],
+                "properties": {
+                  "avatar": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Image file (JPEG, PNG, WebP, or GIF, max 4 MB)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Avatar uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": { "type": "string", "format": "uri", "example": "https://r2.truckconnect.ph/avatars/u_abc123_1710835200000.jpg" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file (wrong type, too large, too small, or magic bytes mismatch)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "500": {
+            "description": "R2 upload failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["User Management"],
+        "operationId": "deleteAvatar",
+        "summary": "Remove avatar",
+        "description": "Deletes the current user's avatar from R2 storage and sets `user.image` to null.",
+        "responses": {
+          "200": {
+            "description": "Avatar removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cleared": { "type": "boolean", "example": true }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/user/delete": {
+      "post": {
+        "tags": ["User Management"],
+        "operationId": "deleteAccount",
+        "summary": "Delete account",
+        "description": "Permanently deletes the authenticated user's account and all associated data. This action is irreversible.\n\n**What gets deleted:**\n- User profile and metadata\n- All active sessions\n- Avatar from R2 storage\n- Organization memberships (user is removed from all orgs)\n- Owned organizations are transferred or deleted based on member count\n\nRequires password confirmation for security.",
+        "x-rateLimit": {
+          "limit": 3,
+          "window": "1 hour",
+          "scope": "user ID"
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password", "confirmation"],
+                "properties": {
+                  "password": { "type": "string", "description": "Current password for verification", "example": "SecureP@ss2025!" },
+                  "confirmation": { "type": "string", "description": "Must be the string 'DELETE MY ACCOUNT'", "example": "DELETE MY ACCOUNT" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": { "type": "boolean", "example": true }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing confirmation string or confirmation does not match",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated or password is incorrect",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CodedErrorResponse" } } }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/user/orgs": {
+      "get": {
+        "tags": ["User Management"],
+        "operationId": "listUserOrgs",
+        "summary": "List user's organizations",
+        "description": "Returns all organizations the current user belongs to, along with their role in each organization. This is a convenience endpoint that provides a simplified view compared to `/api/auth/organization/list`.",
+        "responses": {
+          "200": {
+            "description": "List of organizations the user belongs to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orgs": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/UserOrg" }
+                    }
+                  }
+                },
+                "example": {
+                  "orgs": [
+                    {
+                      "id": "org_manila_express_01",
+                      "name": "Manila Express Logistics",
+                      "slug": "manila-express-logistics",
+                      "role": "owner",
+                      "metadata": { "type": "carrier_fleet" }
+                    },
+                    {
+                      "id": "org_cebu_freight_02",
+                      "name": "Cebu Freight Corp",
+                      "slug": "cebu-freight-corp",
+                      "role": "member",
+                      "metadata": { "type": "freight_forwarder" }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/organization/create": {
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "createOrganization",
+        "summary": "Create a new organization",
+        "description": "Creates a new organization and makes the current user the owner. The slug must be unique across all organizations and will be used in URLs.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "slug"],
+                "properties": {
+                  "name": { "type": "string", "example": "Manila Express Logistics", "description": "Organization display name" },
+                  "slug": { "type": "string", "example": "manila-express-logistics", "description": "URL-safe identifier (lowercase, hyphens allowed)" },
+                  "metadata": {
+                    "type": "object",
+                    "description": "Organization metadata including business type",
+                    "properties": {
+                      "type": { "type": "string", "enum": ["tc_platform", "enterprise_shipper", "msme_shipper", "carrier_fleet", "freight_forwarder", "warehouse_operator"], "example": "carrier_fleet" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Organization created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Organization" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (duplicate slug, missing fields)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/organization/list": {
+      "get": {
+        "tags": ["Organizations"],
+        "operationId": "listOrganizations",
+        "summary": "List organizations the current user belongs to",
+        "description": "Returns all organizations where the current user is a member, along with their role in each. Includes organization metadata such as business type.",
+        "responses": {
+          "200": {
+            "description": "List of organizations with membership info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "name": { "type": "string", "example": "Manila Express Logistics" },
+                      "slug": { "type": "string" },
+                      "role": { "type": "string", "example": "owner" },
+                      "metadata": { "type": "object", "nullable": true }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/organization/invite-member": {
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "inviteMember",
+        "summary": "Invite a user to an organization by email",
+        "description": "Sends an email invitation to join the organization. The invitation includes a link that allows the recipient to accept or reject. Requires org admin role (owner, admin, enterprise_admin, carrier_owner, shipper_admin, or forwarder_admin).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "organizationId", "role"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "maria@carrier.ph", "description": "Email of the user to invite" },
+                  "organizationId": { "type": "string", "example": "org_manila_express_01" },
+                  "role": { "type": "string", "example": "member", "enum": ["owner", "admin", "member", "enterprise_admin", "carrier_owner", "shipper_admin", "forwarder_admin", "dispatcher", "driver", "finance", "viewer"], "description": "Role to assign upon acceptance" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Invitation sent" },
+          "400": {
+            "description": "Invalid input",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/organization/accept-invitation": {
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "acceptInvitation",
+        "summary": "Accept an organization invitation",
+        "description": "Accepts a pending invitation and adds the user as a member of the organization with the role specified in the invitation.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["invitationId"],
+                "properties": {
+                  "invitationId": { "type": "string", "description": "The invitation ID from the invite email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Invitation accepted, user is now a member" },
+          "400": {
+            "description": "Invalid or expired invitation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/organization/reject-invitation": {
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "rejectInvitation",
+        "summary": "Reject an organization invitation",
+        "description": "Rejects a pending invitation. The invitation status is set to 'rejected' and cannot be accepted later.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["invitationId"],
+                "properties": {
+                  "invitationId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Invitation rejected" },
+          "400": {
+            "description": "Invalid or already handled invitation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/organization/get-invitation": {
+      "get": {
+        "tags": ["Organizations"],
+        "operationId": "getInvitation",
+        "summary": "Get invitation details",
+        "description": "Returns details about a specific invitation, including the organization name, inviter email, assigned role, and current status.",
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "string" }, "description": "The invitation ID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "organizationName": { "type": "string", "example": "Manila Express Logistics" },
+                    "inviterEmail": { "type": "string", "format": "email" },
+                    "role": { "type": "string", "example": "member" },
+                    "status": { "type": "string", "enum": ["pending", "accepted", "rejected", "expired"] },
+                    "expiresAt": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Invitation not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/organization/remove-member": {
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "removeMember",
+        "summary": "Remove a member from an organization",
+        "description": "Removes a member from the organization. Requires org admin role. Cannot remove the organization owner -- ownership must be transferred first.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["organizationId", "memberId"],
+                "properties": {
+                  "organizationId": { "type": "string" },
+                  "memberId": { "type": "string", "description": "The member record ID (not the user ID)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Member removed" },
+          "400": {
+            "description": "Cannot remove the owner",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/organization/update-member-role": {
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "updateMemberRole",
+        "summary": "Update a member's role in an organization",
+        "description": "Changes the role of a member within an organization. Requires org admin role. Available roles vary by organization type.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["organizationId", "memberId", "role"],
+                "properties": {
+                  "organizationId": { "type": "string" },
+                  "memberId": { "type": "string" },
+                  "role": { "type": "string", "example": "dispatcher", "enum": ["owner", "admin", "member", "enterprise_admin", "carrier_owner", "shipper_admin", "forwarder_admin", "dispatcher", "driver", "finance", "viewer"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Role updated" },
+          "400": {
+            "description": "Invalid role",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/org/{orgId}/marketplace": {
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "submitMarketplaceProfile",
+        "summary": "Submit marketplace profile",
+        "description": "Submits or updates the organization's marketplace profile for the TruckConnect marketplace directory. This profile is used to list the organization in the marketplace where shippers can discover carriers, forwarders, and warehouse operators.\n\nRequires org admin role. The profile enters a `pending` state for review by TruckConnect platform admins before being published.",
+        "x-rateLimit": {
+          "limit": 5,
+          "window": "1 hour",
+          "scope": "organization ID"
+        },
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "org_manila_express_01", "description": "Organization ID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["businessName", "businessType", "serviceAreas", "description", "contactEmail", "contactPhone"],
+                "properties": {
+                  "businessName": { "type": "string", "example": "Manila Express Logistics", "description": "Business name as it should appear in the marketplace" },
+                  "businessType": { "type": "string", "enum": ["carrier_fleet", "freight_forwarder", "warehouse_operator", "enterprise_shipper", "msme_shipper"], "example": "carrier_fleet" },
+                  "serviceAreas": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "example": ["NCR", "Central Luzon", "CALABARZON"],
+                    "description": "Philippine regions where the organization operates"
+                  },
+                  "vehicleTypes": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "example": ["6-wheeler", "10-wheeler", "trailer"],
+                    "description": "Types of vehicles available (for carriers)"
+                  },
+                  "description": { "type": "string", "maxLength": 2000, "example": "Full-service carrier fleet operating across Luzon with 50+ trucks", "description": "Business description for marketplace listing" },
+                  "contactEmail": { "type": "string", "format": "email", "example": "ops@manilaexpress.ph" },
+                  "contactPhone": { "type": "string", "example": "+639171234567" },
+                  "website": { "type": "string", "format": "uri", "nullable": true, "example": "https://manilaexpress.ph" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Marketplace profile submitted for review",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MarketplaceProfile" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (missing required fields, invalid business type)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/api-key": {
+      "post": {
+        "tags": ["API Keys"],
+        "operationId": "validateApiKey",
+        "summary": "Validate a TruckConnect API key",
+        "description": "Validates a `tc_live_*` API key and returns the associated organization context and permissions. This endpoint is called by other TruckConnect microservices to authenticate incoming API requests.\n\n**Security features:**\n- Timing-safe comparison with a 50ms minimum response floor to prevent enumeration attacks\n- Automatic key usage tracking (`lastUsedAt` timestamp updated)\n\nThe key can be provided via the `Authorization: Bearer <key>` header or in the JSON body as `{ \"key\": \"...\" }`.",
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": { "type": "string", "description": "The API key (alternative to Authorization header)", "example": "tc_live_a1b2c3d4_e5f6a7b8c9d0e1f2a3b4c5d6" }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "Bearer token with the API key",
+            "schema": { "type": "string", "example": "Bearer tc_live_a1b2c3d4_e5f6a7b8c9d0e1f2a3b4c5d6" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key is valid -- returns organization context and permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": { "type": "boolean", "example": true },
+                    "keyId": { "type": "string", "example": "k_a1b2c3d4e5f6" },
+                    "keyName": { "type": "string", "example": "Production TMS Integration" },
+                    "org": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "example": "org_manila_express_01" },
+                        "name": { "type": "string", "example": "Manila Express Logistics" },
+                        "type": { "type": "string", "example": "carrier_fleet", "enum": ["tc_platform", "enterprise_shipper", "msme_shipper", "carrier_fleet", "freight_forwarder", "unknown"] }
+                      }
+                    },
+                    "permissions": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "example": ["bookings.read", "trips.create", "trips.read", "trips.update", "trips.complete", "carriers.manage_own", "payments.view", "api.rest_access"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Key is invalid, revoked, or expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": { "type": "boolean", "example": false },
+                    "reason": { "type": "string", "enum": ["not_found", "revoked", "expired"], "example": "not_found" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/org/{orgId}/keys": {
+      "get": {
+        "tags": ["API Keys"],
+        "operationId": "listApiKeys",
+        "summary": "List API keys for an organization",
+        "description": "Returns all API keys for the organization. Does not include plaintext keys (only the prefix for identification). Requires org admin role (owner, admin, enterprise_admin, carrier_owner, shipper_admin, forwarder_admin) or super_admin.",
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "org_manila_express_01", "description": "Organization ID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of API keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "keys": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ApiKeyListItem" }
+                    }
+                  }
+                },
+                "example": {
+                  "keys": [
+                    {
+                      "id": "k_a1b2c3d4e5f6",
+                      "name": "Production TMS Integration",
+                      "prefix": "tc_live_a1b2c3d4...",
+                      "expiresAt": "2026-06-19T00:00:00.000Z",
+                      "lastUsedAt": "2026-03-18T14:30:00.000Z",
+                      "revokedAt": null,
+                      "createdAt": "2025-12-01T08:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["API Keys"],
+        "operationId": "createApiKey",
+        "summary": "Create a new API key for an organization",
+        "description": "Generates a new `tc_live_*` API key. The plaintext key is returned **ONCE** in the response and is never stored -- save it immediately.\n\n**Limits:** Maximum 50 active keys per organization.\n\nRequires org admin role.",
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "org_manila_express_01" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 255, "description": "A descriptive label for the key", "example": "Cebu Dispatch Integration" },
+                  "expiresInDays": { "type": "integer", "minimum": 1, "maximum": 3650, "description": "Number of days until the key expires (optional, defaults to no expiry)", "example": 90 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API key created. Save the `plaintext` value immediately -- it cannot be retrieved again.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiKeyCreated" },
+                "example": {
+                  "id": "k_f7e8d9c0b1a2",
+                  "name": "Cebu Dispatch Integration",
+                  "prefix": "tc_live_f7e8d9c0...",
+                  "plaintext": "tc_live_f7e8d9c0_a1b2c3d4e5f6a7b8c9d0e1f2",
+                  "expiresAt": "2026-06-17T08:00:00.000Z",
+                  "createdAt": "2026-03-19T08:00:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (name too long, invalid expiresInDays, or 50 key limit reached)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/org/{orgId}/keys/{keyId}": {
+      "delete": {
+        "tags": ["API Keys"],
+        "operationId": "revokeApiKey",
+        "summary": "Revoke an API key",
+        "description": "Soft-deletes an API key by setting its `revokedAt` timestamp. The key will immediately stop working for authentication. This action cannot be undone. Requires org admin role.",
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "org_manila_express_01" },
+          { "name": "keyId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "k_a1b2c3d4e5f6" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": { "type": "boolean", "example": true }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Key not found in this organization",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "409": {
+            "description": "Key is already revoked",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/org/{orgId}/invite-codes": {
+      "get": {
+        "tags": ["Organizations"],
+        "operationId": "listInviteCodes",
+        "summary": "List invite codes for an organization",
+        "description": "Returns all invite codes (active and revoked) for the organization. Requires org admin role.",
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "org_manila_express_01" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of invite codes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/InviteCode" }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CodedErrorResponse" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "createInviteCode",
+        "summary": "Create an invite code for an organization",
+        "description": "Generates a shareable invite code that others can use to join the organization. Maximum 50 codes per organization.\n\n**Code format:** 8 alphanumeric characters (no ambiguous chars like O/0/I/1). You can optionally provide a custom code.\n\n**Valid roles:** owner, admin, member, enterprise_admin, carrier_owner, shipper_admin, forwarder_admin, dispatcher, driver, finance, viewer.",
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "org_manila_express_01" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role": { "type": "string", "default": "member", "example": "driver", "description": "The role assigned to users who redeem this code" },
+                  "maxUses": { "type": "integer", "minimum": 1, "maximum": 10000, "nullable": true, "description": "Maximum number of times the code can be used (null for unlimited)", "example": 50 },
+                  "expiresInDays": { "type": "integer", "minimum": 1, "maximum": 365, "nullable": true, "description": "Number of days until the code expires", "example": 30 },
+                  "code": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^[A-Z0-9-]+$", "description": "Custom code (optional, auto-generated if not provided)", "example": "MNLX-DRIVERS" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invite code created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "code": { "type": "string", "example": "MNLX-DRIVERS" },
+                    "role": { "type": "string", "example": "driver" },
+                    "maxUses": { "type": "integer", "nullable": true, "example": 50 },
+                    "expiresAt": { "type": "string", "format": "date-time", "nullable": true },
+                    "createdAt": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (invalid role, code format, etc.)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "409": {
+            "description": "Custom code already exists",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "429": {
+            "description": "Maximum 50 invite codes per organization reached",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Organizations"],
+        "operationId": "revokeInviteCode",
+        "summary": "Revoke an invite code",
+        "description": "Soft-deletes an invite code by setting its `revokedAt` timestamp. The code will immediately stop working. Requires org admin role.\n\nPass the invite code's `id` in the request body.",
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string" }, "example": "org_manila_express_01" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "string", "description": "The invite code record ID to revoke" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Code revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing id",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not an org admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Code not found in this organization",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "409": {
+            "description": "Code is already revoked",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/invite-code/join": {
+      "get": {
+        "tags": ["Organizations"],
+        "operationId": "previewInviteCode",
+        "summary": "Preview an invite code (no auth required)",
+        "description": "Returns public information about an invite code: the organization name, the role it grants, remaining spots, and expiration. Does not require authentication. Useful for showing a preview before the user signs in or signs up.",
+        "security": [],
+        "parameters": [
+          { "name": "code", "in": "query", "required": true, "schema": { "type": "string" }, "example": "MNLX2025" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Code is valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": { "type": "boolean", "example": true },
+                    "organization": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "example": "org_manila_express_01" },
+                        "name": { "type": "string", "example": "Manila Express Logistics" }
+                      }
+                    },
+                    "role": { "type": "string", "example": "driver" },
+                    "spotsLeft": { "type": "integer", "nullable": true, "example": 47, "description": "Remaining uses, or null if unlimited" },
+                    "expiresAt": { "type": "string", "format": "date-time", "nullable": true }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing code parameter",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Invalid invite code",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "410": {
+            "description": "Code is revoked, expired, or has reached its usage limit",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Organizations"],
+        "operationId": "redeemInviteCode",
+        "summary": "Redeem an invite code to join an organization",
+        "description": "Uses an invite code to add the authenticated user as a member of the associated organization. Atomically increments the usage counter to prevent race conditions past `maxUses`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code"],
+                "properties": {
+                  "code": { "type": "string", "example": "MNLX2025" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully joined organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "organization": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "example": "org_manila_express_01" },
+                        "name": { "type": "string", "example": "Manila Express Logistics" }
+                      }
+                    },
+                    "role": { "type": "string", "example": "driver" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing code",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Invalid invite code",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "409": {
+            "description": "User is already a member of this organization",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "410": {
+            "description": "Code is revoked, expired, or has reached its usage limit",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/webhooks": {
+      "get": {
+        "tags": ["Webhooks"],
+        "operationId": "listWebhooks",
+        "summary": "List webhook endpoints",
+        "description": "Returns all registered webhook endpoints including their event subscriptions and active status. Requires super_admin role.",
+        "responses": {
+          "200": {
+            "description": "List of webhook endpoints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "url": { "type": "string", "format": "uri", "example": "https://api.example.com/webhooks/truckconnect" },
+                      "events": { "type": "array", "items": { "type": "string" }, "example": ["user.created", "session.created", "organization.created"] },
+                      "active": { "type": "boolean", "example": true },
+                      "description": { "type": "string", "nullable": true },
+                      "createdAt": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not a super_admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Webhooks"],
+        "operationId": "createWebhook",
+        "summary": "Register a webhook endpoint",
+        "description": "Creates a new webhook endpoint. Events will be delivered via POST with HMAC-SHA256 signatures in the `X-Signature-256` header. Requires super_admin role.\n\n**Supported events:**\n- `user.created`, `user.updated`, `user.deleted`\n- `session.created`, `session.revoked`\n- `organization.created`, `organization.updated`\n- `member.added`, `member.removed`, `member.role_changed`\n- `invitation.created`, `invitation.accepted`\n- `api_key.created`, `api_key.revoked`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url", "events"],
+                "properties": {
+                  "url": { "type": "string", "format": "uri", "example": "https://api.example.com/webhooks/truckconnect", "description": "HTTPS URL to receive webhook events" },
+                  "events": { "type": "array", "items": { "type": "string" }, "example": ["user.created", "organization.created"], "description": "List of event types to subscribe to" },
+                  "description": { "type": "string", "description": "Optional description for this endpoint", "example": "Production event handler" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook endpoint created. The signing secret is returned ONCE -- save it immediately.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "url": { "type": "string", "format": "uri" },
+                    "secret": { "type": "string", "description": "HMAC-SHA256 signing secret. Save this immediately -- it cannot be retrieved again." },
+                    "events": { "type": "array", "items": { "type": "string" } },
+                    "active": { "type": "boolean", "example": true },
+                    "createdAt": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL or unknown event types",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not a super_admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/webhooks/{id}": {
+      "delete": {
+        "tags": ["Webhooks"],
+        "operationId": "deleteWebhook",
+        "summary": "Delete a webhook endpoint",
+        "description": "Removes a webhook endpoint and all its pending event deliveries. This action is irreversible. Requires super_admin role.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Webhook endpoint ID" }
+        ],
+        "responses": {
+          "200": { "description": "Webhook endpoint deleted" },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not a super_admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Webhook endpoint not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Webhooks"],
+        "operationId": "updateWebhook",
+        "summary": "Update a webhook endpoint",
+        "description": "Updates the URL, events, active status, or description of a webhook endpoint. Only the fields provided will be updated. Requires super_admin role.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Webhook endpoint ID" }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "events": { "type": "array", "items": { "type": "string" } },
+                  "active": { "type": "boolean" },
+                  "description": { "type": "string", "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Webhook endpoint updated" },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not a super_admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Webhook endpoint not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/admin/list-users": {
+      "post": {
+        "tags": ["Admin"],
+        "operationId": "adminListUsers",
+        "summary": "List all users (super_admin only)",
+        "description": "Returns a paginated list of all users on the platform. Supports searching by name or email, sorting, and pagination. Only accessible to users with the `super_admin` role.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "limit": { "type": "integer", "default": 25, "example": 25, "description": "Number of users per page (max 100)" },
+                  "offset": { "type": "integer", "default": 0, "example": 0, "description": "Number of users to skip" },
+                  "search": { "type": "string", "description": "Search by name or email (case-insensitive partial match)", "example": "juan" },
+                  "sortBy": { "type": "string", "enum": ["createdAt", "name", "email"], "default": "createdAt" },
+                  "sortOrder": { "type": "string", "enum": ["asc", "desc"], "default": "desc" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Paginated user list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": { "type": "array", "items": { "$ref": "#/components/schemas/User" } },
+                    "total": { "type": "integer", "description": "Total number of users matching the query" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not a super_admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/admin/set-role": {
+      "post": {
+        "tags": ["Admin"],
+        "operationId": "adminSetRole",
+        "summary": "Set a user's platform role (super_admin only)",
+        "description": "Changes a user's platform-level role. Use this to promote a user to `super_admin` or demote them back to `user`. Cannot change your own role.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId", "role"],
+                "properties": {
+                  "userId": { "type": "string", "example": "u_abc123def456" },
+                  "role": { "type": "string", "enum": ["user", "super_admin"], "example": "super_admin" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Role updated" },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not a super_admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/admin/ban-user": {
+      "post": {
+        "tags": ["Admin"],
+        "operationId": "adminBanUser",
+        "summary": "Ban a user (super_admin only)",
+        "description": "Bans a user, preventing them from signing in. All active sessions are immediately invalidated. An optional reason can be provided for audit purposes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId"],
+                "properties": {
+                  "userId": { "type": "string", "example": "u_abc123def456" },
+                  "reason": { "type": "string", "example": "Violated terms of service", "description": "Optional reason for the ban (stored for audit trail)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "User banned and all sessions invalidated" },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not a super_admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/admin/unban-user": {
+      "post": {
+        "tags": ["Admin"],
+        "operationId": "adminUnbanUser",
+        "summary": "Unban a user (super_admin only)",
+        "description": "Lifts a ban on a user, allowing them to sign in again. The user will need to create a new session.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId"],
+                "properties": {
+                  "userId": { "type": "string", "example": "u_abc123def456" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "User unbanned" },
+          "401": {
+            "description": "Not authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "Not a super_admin",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    }
+  }
+}

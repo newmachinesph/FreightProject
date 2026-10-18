@@ -1,0 +1,10 @@
+{
+  "name": "TruckConnect Philippines",
+  "short_name": "TruckConnect",
+  "description": "The Philippine freight platform connecting shippers, carriers, and warehouses",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563EB",
+  "icons": []
+}

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" fill="#334155">
+  <!-- Small reefer van - cab-over with reefer unit on cargo box, 4 wheels -->
+  <!-- Cab -->
+  <path d="M16,28 L16,58 L60,58 L60,24 Q60,20 56,20 L20,20 Q16,20 16,24 Z"/>
+  <!-- Windshield -->
+  <path d="M20,24 L42,24 L42,44 L20,44 Z" fill="#94a3b8"/>
+  <!-- Headlight -->
+  <rect x="14" y="42" width="4" height="5" rx="1" fill="#fbbf24"/>
+  <!-- Bumper -->
+  <rect x="12" y="54" width="50" height="5" rx="2"/>
+  <!-- Cargo box -->
+  <rect x="62" y="16" width="120" height="42" rx="2"/>
+  <!-- Cargo box detail lines -->
+  <line x1="62" y1="20" x2="182" y2="20" stroke="#1e293b" stroke-width="0.5"/>
+  <line x1="122" y1="20" x2="122" y2="58" stroke="#1e293b" stroke-width="0.5"/>
+  <!-- Reefer unit on top front of cargo box -->
+  <rect x="62" y="6" width="24" height="10" rx="2" fill="#475569"/>
+  <!-- Reefer unit grille lines -->
+  <line x1="65" y1="9" x2="83" y2="9" stroke="#94a3b8" stroke-width="0.5"/>
+  <line x1="65" y1="11" x2="83" y2="11" stroke="#94a3b8" stroke-width="0.5"/>
+  <line x1="65" y1="13" x2="83" y2="13" stroke="#94a3b8" stroke-width="0.5"/>
+  <!-- Cargo floor -->
+  <rect x="62" y="56" width="120" height="4" rx="1" fill="#1e293b"/>
+  <!-- Tail light -->
+  <rect x="182" y="40" width="4" height="6" rx="1" fill="#ef4444"/>
+  <!-- Wheel wells -->
+  <rect x="28" y="57" width="24" height="7" rx="4" fill="#1e293b"/>
+  <rect x="144" y="57" width="24" height="7" rx="4" fill="#1e293b"/>
+  <!-- Wheels -->
+  <circle cx="40" cy="64" r="10" fill="#1e293b"/>
+  <circle cx="40" cy="64" r="5" fill="#64748b"/>
+  <circle cx="156" cy="64" r="10" fill="#1e293b"/>
+  <circle cx="156" cy="64" r="5" fill="#64748b"/>
+</svg>

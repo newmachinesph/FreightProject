@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" fill="#334155">
+  <!-- Mitsubishi L300 - boxy cargo van, high roof -->
+  <!-- Body -->
+  <path d="M20,58 L20,18 Q20,14 24,14 L160,14 Q164,14 164,18 L164,58 L20,58 Z"/>
+  <!-- Windshield -->
+  <path d="M24,20 L40,20 L40,42 L24,42 Z" fill="#94a3b8"/>
+  <!-- Side windows -->
+  <path d="M44,20 L70,20 L70,38 L44,38 Z" fill="#94a3b8"/>
+  <!-- Bumper -->
+  <rect x="14" y="52" width="156" height="6" rx="2"/>
+  <!-- Front bumper -->
+  <rect x="14" y="52" width="12" height="8" rx="2"/>
+  <!-- Rear bumper -->
+  <rect x="158" y="52" width="12" height="8" rx="2"/>
+  <!-- Wheel wells -->
+  <rect x="30" y="56" width="30" height="8" rx="4" fill="#1e293b"/>
+  <rect x="124" y="56" width="30" height="8" rx="4" fill="#1e293b"/>
+  <!-- Wheels -->
+  <circle cx="45" cy="64" r="10" fill="#1e293b"/>
+  <circle cx="45" cy="64" r="5" fill="#64748b"/>
+  <circle cx="139" cy="64" r="10" fill="#1e293b"/>
+  <circle cx="139" cy="64" r="5" fill="#64748b"/>
+  <!-- Door line -->
+  <line x1="80" y1="18" x2="80" y2="52" stroke="#1e293b" stroke-width="1"/>
+  <!-- Headlight -->
+  <rect x="16" y="36" width="4" height="6" rx="1" fill="#fbbf24"/>
+  <!-- Tail light -->
+  <rect x="164" y="36" width="4" height="6" rx="1" fill="#ef4444"/>
+</svg>
